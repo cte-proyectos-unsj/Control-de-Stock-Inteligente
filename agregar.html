@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agregar Producto - Stock Inteligente</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <i class="fas fa-boxes"></i>
+                <h1>Stock Inteligente</h1>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="index.html"><i class="fas fa-home"></i> Dashboard</a></li>
+                <li><a href="productos.html"><i class="fas fa-box"></i> Productos</a></li>
+                <li><a href="escanear.html"><i class="fas fa-camera"></i> Escanear</a></li>
+                <li><a href="alertas.html"><i class="fas fa-bell"></i> Alertas</a></li>
+                <li><a href="agregar.html" class="active"><i class="fas fa-plus"></i> Agregar</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="container">
+        <header class="page-header">
+            <h2 id="formTitle"><i class="fas fa-plus-circle"></i> Agregar Nuevo Producto</h2>
+            <a href="productos.html" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Volver
+            </a>
+        </header>
+
+        <section class="form-section">
+            <form id="productForm" class="product-form">
+                <div class="form-grid">
+                    <!-- Información Básica -->
+                    <div class="form-group full-width">
+                        <h3><i class="fas fa-info-circle"></i> Información Básica</h3>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="productName">
+                            Nombre del Producto <span class="required">*</span>
+                        </label>
+                        <input type="text" id="productName" required placeholder="Ej: Coca-Cola 2.25L">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="productBarcode">
+                            Código de Barras
+                        </label>
+                        <div class="input-group">
+                            <input type="text" id="productBarcode" placeholder="7790895000015">
+                            <button type="button" class="btn btn-secondary" onclick="window.location.href='escanear.html'">
+                                <i class="fas fa-camera"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Stock -->
+                    <div class="form-group full-width">
+                        <h3><i class="fas fa-boxes"></i> Control de Stock</h3>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="productQuantity">
+                            Cantidad Actual <span class="required">*</span>
+                        </label>
+                        <input type="number" id="productQuantity" required min="0" value="0">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="productMinStock">
+                            Stock Mínimo <span class="required">*</span>
+                        </label>
+                        <input type="number" id="productMinStock" required min="1" value="5">
+                        <small>Recibirás alertas cuando el stock baje de este valor</small>
+                    </div>
+
+                    <!-- Vencimiento y Proveedor -->
+                    <div class="form-group full-width">
+                        <h3><i class="fas fa-calendar-alt"></i> Información Adicional</h3>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="productExpiry">
+                            Fecha de Vencimiento
+                        </label>
+                        <input type="date" id="productExpiry">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="productSupplier">
+                            Proveedor
+                        </label>
+                        <input type="text" id="productSupplier" placeholder="Ej: Distribuidora Sur">
+                    </div>
+
+                    <!-- Precio -->
+                    <div class="form-group">
+                        <label for="productPrice">
+                            Precio Unitario
+                        </label>
+                        <div class="input-group">
+                            <span class="input-prefix">$</span>
+                            <input type="number" id="productPrice" min="0" step="0.01" value="0" placeholder="0.00">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <!-- Espacio vacío para alineación -->
+                    </div>
+                </div>
+
+                <!-- Botones de Acción -->
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="resetForm()">
+                        <i class="fas fa-redo"></i> Limpiar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> <span id="btnSubmitText">Guardar Producto</span>
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <!-- Resumen del Producto -->
+        <section class="product-preview">
+            <h3><i class="fas fa-eye"></i> Vista Previa</h3>
+            <div class="preview-card">
+                <div class="preview-item">
+                    <strong>Producto:</strong>
+                    <span id="previewName">-</span>
+                </div>
+                <div class="preview-item">
+                    <strong>Stock:</strong>
+                    <span id="previewStock">-</span>
+                </div>
+                <div class="preview-item">
+                    <strong>Valor Total:</strong>
+                    <span id="previewTotal">$0</span>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script src="js/storage.js"></script>
+    <script src="js/app.js"></script>
+    <script>
+        let editingProductId = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Verificar si estamos editando
+            const urlParams = new URLSearchParams(window.location.search);
+            const editId = urlParams.get('edit');
+
+            if (editId) {
+                loadProductForEdit(parseInt(editId));
+            }
+
+            // Preview en tiempo real
+            document.querySelectorAll('#productName, #productQuantity, #productPrice').forEach(input => {
+                input.addEventListener('input', updatePreview);
+            });
+
+            // Submit del formulario
+            document.getElementById('productForm').addEventListener('submit', handleSubmit);
+        });
+
+        function loadProductForEdit(productId) {
+            const product = getProducts().find(p => p.id === productId);
+            if (!product) {
+                alert('Producto no encontrado');
+                window.location.href = 'productos.html';
+                return;
+            }
+
+            editingProductId = productId;
+            document.getElementById('formTitle').innerHTML = '<i class="fas fa-edit"></i> Editar Producto';
+            document.getElementById('btnSubmitText').textContent = 'Actualizar Producto';
+
+            // Cargar datos en el formulario
+            document.getElementById('productName').value = product.name;
+            document.getElementById('productBarcode').value = product.barcode || '';
+            document.getElementById('productQuantity').value = product.quantity;
+            document.getElementById('productMinStock').value = product.minStock;
+            document.getElementById('productExpiry').value = product.expiryDate || '';
+            document.getElementById('productSupplier').value = product.supplier || '';
+            document.getElementById('productPrice').value = product.price;
+
+            updatePreview();
+        }
+
+        function handleSubmit(e) {
+            e.preventDefault();
+
+            const productData = {
+                name: document.getElementById('productName').value.trim(),
+                barcode: document.getElementById('productBarcode').value.trim(),
+                quantity: parseInt(document.getElementById('productQuantity').value),
+                minStock: parseInt(document.getElementById('productMinStock').value),
+                expiryDate: document.getElementById('productExpiry').value,
+                supplier: document.getElementById('productSupplier').value.trim(),
+                price: parseFloat(document.getElementById('productPrice').value)
+            };
+
+            if (editingProductId) {
+                // Actualizar producto existente
+                updateProduct(editingProductId, productData);
+                alert('✅ Producto actualizado correctamente');
+            } else {
+                // Crear nuevo producto
+                addProduct(productData);
+                alert('✅ Producto agregado correctamente');
+            }
+
+            window.location.href = 'productos.html';
+        }
+
+        function updatePreview() {
+            const name = document.getElementById('productName').value || '-';
+            const quantity = document.getElementById('productQuantity').value || 0;
+            const price = document.getElementById('productPrice').value || 0;
+            const total = quantity * price;
+
+            document.getElementById('previewName').textContent = name;
+            document.getElementById('previewStock').textContent = quantity;
+            document.getElementById('previewTotal').textContent = `$${total.toLocaleString('es-AR')}`;
+        }
+
+        function resetForm() {
+            if (confirm('¿Deseas limpiar el formulario?')) {
+                document.getElementById('productForm').reset();
+                editingProductId = null;
+                updatePreview();
+            }
+        }
+    </script>
+</body>
+</html>

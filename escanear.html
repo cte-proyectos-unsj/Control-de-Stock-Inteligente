@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Escanear Producto - Stock Inteligente</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <i class="fas fa-boxes"></i>
+                <h1>Stock Inteligente</h1>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="index.html"><i class="fas fa-home"></i> Dashboard</a></li>
+                <li><a href="productos.html"><i class="fas fa-box"></i> Productos</a></li>
+                <li><a href="escanear.html" class="active"><i class="fas fa-camera"></i> Escanear</a></li>
+                <li><a href="alertas.html"><i class="fas fa-bell"></i> Alertas</a></li>
+                <li><a href="agregar.html"><i class="fas fa-plus"></i> Agregar</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="container">
+        <header class="page-header">
+            <h2><i class="fas fa-qrcode"></i> Escanear Código de Barras</h2>
+        </header>
+
+        <!-- Selector de Método -->
+        <section class="scanner-options">
+            <button class="btn btn-primary" onclick="startCamera()">
+                <i class="fas fa-camera"></i> Usar Cámara
+            </button>
+            <button class="btn btn-secondary" onclick="showManualInput()">
+                <i class="fas fa-keyboard"></i> Ingresar Manualmente
+            </button>
+        </section>
+        <!-- Visor de Cámara -->
+        <section id="cameraSection" class="scanner-section" style="display:none;">
+            <div class="camera-container">
+                <div id="scanner-container">
+                    <video id="scanner-video" autoplay playsinline></video>
+                    <canvas id="scanner-canvas"></canvas>
+                    <div class="scanner-overlay">
+                        <div class="scanner-line"></div>
+                    </div>
+                </div>
+                <div class="scanner-instructions">
+                    <p><i class="fas fa-info-circle"></i> Coloca el código de barras dentro del marco</p>
+                </div>
+            </div>
+            <div class="scanner-controls">
+                <button class="btn btn-danger" onclick="stopCamera()">
+                    <i class="fas fa-stop"></i> Detener Cámara
+                </button>
+            </div>
+        </section>
+
+        <!-- Entrada Manual -->
+        <section id="manualSection" class="scanner-section" style="display:none;">
+            <div class="manual-input-container">
+                <div class="form-group">
+                    <label for="manualBarcode">Código de Barras:</label>
+                    <input type="text" id="manualBarcode" placeholder="Ingresa el código de barras" class="barcode-input">
+                </div>
+                <button class="btn btn-primary" onclick="searchBarcode()">
+                    <i class="fas fa-search"></i> Buscar Producto
+                </button>
+            </div>
+        </section>
+
+        <!-- Resultado del Escaneo -->
+        <section id="resultSection" class="result-section" style="display:none;">
+            <div class="result-card">
+                <div class="result-header">
+                    <h3 id="resultTitle"></h3>
+                    <button class="btn-close" onclick="closeResult()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="result-body" id="resultBody">
+                    <!-- Contenido dinámico -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Historial de Escaneos -->
+        <section class="scan-history">
+            <h3><i class="fas fa-history"></i> Últimos Escaneos</h3>
+            <div id="scanHistory" class="history-list">
+                <p class="text-muted">No hay escaneos recientes</p>
+            </div>
+        </section>
+    </main>
+
+    <script src="js/storage.js"></script>
+    <script src="js/app.js"></script>
+    <script src="js/scanner.js"></script>
+    <script>
+        let scanHistory = [];
+
+        function startCamera() {
+            document.getElementById('cameraSection').style.display = 'block';
+            document.getElementById('manualSection').style.display = 'none';
+            
+            Quagga.init({
+                inputStream: {
+                    name: "Live",
+                    type: "LiveStream",
+                    target: document.querySelector('#scanner-container'),
+                    constraints: {
+                        width: 640,
+                        height: 480,
+                        facingMode: "environment"
+                    }
+                },
+                decoder: {
+                    readers: ["ean_reader", "code_128_reader", "ean_8_reader", "code_39_reader", "upc_reader"]
+                }
+            }, function(err) {
+                if (err) {
+                    console.error(err);
+                    alert("Error al iniciar la cámara: " + err.message);
+                    return;
+                }
+                console.log("Cámara iniciada correctamente");
+                Quagga.start();
+            });
+
+            Quagga.onDetected(function(result) {
+                const code = result.codeResult.code;
+                console.log("Código detectado:", code);
+                handleBarcodeDetected(code);
+            });
+        }
+
+        function stopCamera() {
+            Quagga.stop();
+            document.getElementById('cameraSection').style.display = 'none';
+        }
+
+        function showManualInput() {
+            document.getElementById('manualSection').style.display = 'block';
+            document.getElementById('cameraSection').style.display = 'none';
+            document.getElementById('manualBarcode').focus();
+        }
+
+        function searchBarcode() {
+            const code = document.getElementById('manualBarcode').value.trim();
+            if (code) {
+                handleBarcodeDetected(code);
+            }
+        }
+
+        function handleBarcodeDetected(barcode) {
+            stopCamera();
+            
+            const products = getProducts();
+            const product = products.find(p => p.barcode === barcode);
+
+            // Agregar al historial
+            addToHistory(barcode, product);
+
+            if (product) {
+                showProductFound(product);
+            } else {
+                showProductNotFound(barcode);
+            }
+        }
+
+        function showProductFound(product) {
+            const stockStatus = product.quantity <= product.minStock ? 'badge-danger' : 'badge-success';
+            const expiryWarning = checkExpiryWarning(product.expiryDate);
+
+            document.getElementById('resultTitle').innerHTML = '<i class="fas fa-check-circle text-success"></i> Producto Encontrado';
+            document.getElementById('resultBody').innerHTML = `
+                <div class="product-details">
+                    <div class="detail-row">
+                        <strong>Nombre:</strong>
+                        <span>${product.name}</span>
+                    </div>
+                    <div class="detail-row">
+                        <strong>Código:</strong>
+                        <span>${product.barcode}</span>
+                    </div>
+                    <div class="detail-row">
+                        <strong>Stock Actual:</strong>
+                        <span class="badge ${stockStatus}">${product.quantity} unidades</span>
+                    </div>
+                    <div class="detail-row">
+                        <strong>Stock Mínimo:</strong>
+                        <span>${product.minStock} unidades</span>
+                    </div>
+                    <div class="detail-row">
+                        <strong>Precio:</strong>
+                        <span>$${product.price.toLocaleString('es-AR')}</span>
+                    </div>
+                    <div class="detail-row">
+                        <strong>Vencimiento:</strong>
+                        <span>${product.expiryDate || 'Sin vencimiento'} ${expiryWarning}</span>
+                    </div>
+                    <div class="detail-row">
+                        <strong>Proveedor:</strong>
+                        <span>${product.supplier || '-'}</span>
+                    </div>
+                </div>
+
+                <div class="quick-actions">
+                    <h4>Acciones Rápidas</h4>
+                    <div class="action-buttons">
+                        <button class="btn btn-primary" onclick="quickUpdateStock(${product.id}, -1)">
+                            <i class="fas fa-minus"></i> Restar 1
+                        </button>
+                        <button class="btn btn-primary" onclick="quickUpdateStock(${product.id}, 1)">
+                            <i class="fas fa-plus"></i> Sumar 1
+                        </button>
+                        <button class="btn btn-secondary" onclick="window.location.href='agregar.html?edit=${product.id}'">
+                            <i class="fas fa-edit"></i> Editar
+                        </button>
+                    </div>
+                </div>
+            `;
+            document.getElementById('resultSection').style.display = 'block';
+        }
+
+        function showProductNotFound(barcode) {
+            document.getElementById('resultTitle').innerHTML = '<i class="fas fa-exclamation-triangle text-warning"></i> Producto No Encontrado';
+            document.getElementById('resultBody').innerHTML = `
+                <div class="not-found-message">
+                    <p>No se encontró ningún producto con el código: <strong>${barcode}</strong></p>
+                    <p>¿Deseas agregarlo al inventario?</p>
+                    <div class="action-buttons">
+                        <button class="btn btn-primary" onclick="addNewProduct('${barcode}')">
+                            <i class="fas fa-plus-circle"></i> Agregar Producto
+                        </button>
+                        <button class="btn btn-secondary" onclick="closeResult()">
+                            <i class="fas fa-redo"></i> Escanear Otro
+                        </button>
+                    </div>
+                </div>
+            `;
+            document.getElementById('resultSection').style.display = 'block';
+        }
+
+        function checkExpiryWarning(expiryDate) {
+            if (!expiryDate) return '';
+            
+            const today = new Date();
+            const expiry = new Date(expiryDate);
+            const days = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
+
+            if (days < 0) return '<span class="badge badge-danger">VENCIDO</span>';
+            if (days <= 7) return '<span class="badge badge-warning">⚠️ Vence en ' + days + ' días</span>';
+            return '';
+        }
+
+        function quickUpdateStock(productId, amount) {
+            const products = getProducts();
+            const product = products.find(p => p.id === productId);
+            
+            if (product) {
+                const newQuantity = Math.max(0, product.quantity + amount);
+                updateProductStock(productId, newQuantity);
+                alert(`Stock actualizado: ${product.name} ahora tiene ${newQuantity} unidades`);
+                handleBarcodeDetected(product.barcode);
+            }
+        }
+
+        function addNewProduct(barcode) {
+            window.location.href = `agregar.html?barcode=${barcode}`;
+        }
+
+        function closeResult() {
+            document.getElementById('resultSection').style.display = 'none';
+            document.getElementById('manualBarcode').value = '';
+        }
+
+        function addToHistory(barcode, product) {
+            const historyItem = {
+                barcode: barcode,
+                productName: product ? product.name : 'No encontrado',
+                timestamp: new Date().toLocaleString('es-AR'),
+                found: !!product
+            };
+
+            scanHistory.unshift(historyItem);
+            if (scanHistory.length > 10) scanHistory.pop();
+
+            displayHistory();
+        }
+
+        function displayHistory() {
+            const container = document.getElementById('scanHistory');
+            
+            if (scanHistory.length === 0) {
+                container.innerHTML = '<p class="text-muted">No hay escaneos recientes</p>';
+                return;
+            }
+
+            container.innerHTML = scanHistory.map(item => `
+                <div class="history-item ${item.found ? 'found' : 'not-found'}">
+                    <div class="history-icon">
+                        <i class="fas fa-${item.found ? 'check-circle' : 'times-circle'}"></i>
+                    </div>
+                    <div class="history-content">
+                        <strong>${item.productName}</strong>
+                        <small>${item.barcode} - ${item.timestamp}</small>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Permitir enter en input manual
+        document.addEventListener('DOMContentLoaded', () => {
+            const manualInput = document.getElementById('manualBarcode');
+            if (manualInput) {
+                manualInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        searchBarcode();
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>

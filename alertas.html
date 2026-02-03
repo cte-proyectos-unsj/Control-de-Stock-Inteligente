@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alertas - Stock Inteligente</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <i class="fas fa-boxes"></i>
+                <h1>Stock Inteligente</h1>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="index.html"><i class="fas fa-home"></i> Dashboard</a></li>
+                <li><a href="productos.html"><i class="fas fa-box"></i> Productos</a></li>
+                <li><a href="escanear.html"><i class="fas fa-camera"></i> Escanear</a></li>
+                <li><a href="alertas.html" class="active"><i class="fas fa-bell"></i> Alertas</a></li>
+                <li><a href="agregar.html"><i class="fas fa-plus"></i> Agregar</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="container">
+        <header class="page-header">
+            <h2><i class="fas fa-bell"></i> Centro de Alertas</h2>
+            <div class="alert-stats">
+                <span class="stat-badge critical" id="criticalCount">0</span>
+                <span class="stat-badge high" id="highCount">0</span>
+                <span class="stat-badge medium" id="mediumCount">0</span>
+            </div>
+        </header>
+
+        <!-- Filtros de Alertas -->
+        <section class="filter-section">
+            <div class="filter-buttons">
+                <button class="btn btn-filter active" data-filter="all">
+                    Todas (<span id="allCount">0</span>)
+                </button>
+                <button class="btn btn-filter" data-filter="stock">
+                    <i class="fas fa-boxes"></i> Stock Bajo (<span id="stockCount">0</span>)
+                </button>
+                <button class="btn btn-filter" data-filter="expiry">
+                    <i class="fas fa-calendar-times"></i> Vencimientos (<span id="expiryCount">0</span>)
+                </button>
+                <button class="btn btn-filter" data-filter="expired">
+                    <i class="fas fa-times-circle"></i> Vencidos (<span id="expiredCount">0</span>)
+                </button>
+            </div>
+        </section>
+
+        <!-- Lista de Alertas -->
+        <section class="alerts-section">
+            <div id="alertsContainer" class="alerts-list">
+                <p class="loading">Cargando alertas...</p>
+            </div>
+        </section>
+
+        <!-- Resumen de Acciones Recomendadas -->
+        <section class="recommendations-section">
+            <h3><i class="fas fa-lightbulb"></i> Acciones Recomendadas</h3>
+            <div id="recommendationsList" class="recommendations-list">
+                <!-- Contenido dinámico -->
+            </div>
+        </section>
+    </main>
+
+    <script src="js/storage.js"></script>
+    <script src="js/app.js"></script>
+    <script>
+        let currentFilter = 'all';
+        let allAlerts = [];
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadAlerts();
+
+            // Botones de filtro
+            document.querySelectorAll('.btn-filter').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    document.querySelectorAll('.btn-filter').forEach(b => b.classList.remove('active'));
+                    e.target.closest('.btn-filter').classList.add('active');
+                    currentFilter = e.target.closest('.btn-filter').dataset.filter;
+                    displayAlerts();
+                });
+            });
+        });
+
+        function loadAlerts() {
+            allAlerts = getAlerts();
+            updateAlertCounts();
+            displayAlerts();
+            generateRecommendations();
+        }
+
+        function updateAlertCounts() {
+            const criticalCount = allAlerts.filter(a => a.severity === 'critical').length;
+            const highCount = allAlerts.filter(a => a.severity === 'high').length;
+            const mediumCount = allAlerts.filter(a => a.severity === 'medium').length;
+            const stockCount = allAlerts.filter(a => a.type === 'stock').length;
+            const expiryCount = allAlerts.filter(a => a.type === 'expiry').length;
+            const expiredCount = allAlerts.filter(a => a.type === 'expired').length;
+
+            document.getElementById('criticalCount').textContent = criticalCount;
+            document.getElementById('highCount').textContent = highCount;
+            document.getElementById('mediumCount').textContent = mediumCount;
+            document.getElementById('allCount').textContent = allAlerts.length;
+            document.getElementById('stockCount').textContent = stockCount;
+            document.getElementById('expiryCount').textContent = expiryCount;
+            document.getElementById('expiredCount').textContent = expiredCount;
+        }
+
+        function displayAlerts() {
+            const container = document.getElementById('alertsContainer');
+            
+            let filteredAlerts = allAlerts;
+            if (currentFilter !== 'all') {
+                filteredAlerts = allAlerts.filter(a => a.type === currentFilter);
+            }
+
+            if (filteredAlerts.length === 0) {
+                container.innerHTML = `
+                    <div class="no-alerts">
+                        <i class="fas fa-check-circle"></i>
+                        <h3>¡Todo en orden!</h3>
+                        <p>No hay alertas en esta categoría</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Ordenar por severidad
+            const severityOrder = { critical: 0, high: 1, medium: 2 };
+            filteredAlerts.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
+
+            container.innerHTML = filteredAlerts.map(alert => {
+                const iconMap = {
+                    stock: 'fa-boxes',
+                    expiry: 'fa-calendar-exclamation',
+                    expired: 'fa-times-circle'
+                };
+
+                const severityClass = `alert-${alert.severity}`;
+                const icon = iconMap[alert.type] || 'fa-exclamation-triangle';
+
+                return `
+                    <div class="alert-card ${severityClass}">
+                        <div class="alert-icon">
+                            <i class="fas ${icon}"></i>
+                        </div>
+                        <div class="alert-content">
+                            <h4>${alert.product}</h4>
+                            <p>${alert.message}</p>
+                        </div>
+                        <div class="alert-actions">
+                            <button class="btn btn-sm btn-primary" onclick="goToProduct('${alert.product}')">
+                                <i class="fas fa-eye"></i> Ver
+                            </button>
+                            ${alert.type === 'stock' ? `
+                                <button class="btn btn-sm btn-success" onclick="quickRestock('${alert.product}')">
+                                    <i class="fas fa-plus"></i> Reponer
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function generateRecommendations() {
+            const container = document.getElementById('recommendationsList');
+            const products = getProducts();
+            const recommendations = [];
+
+            // Productos con stock crítico
+            const criticalStock = products.filter(p => p.quantity <= p.minStock);
+            if (criticalStock.length > 0) {
+                recommendations.push({
+                    icon: 'fa-shopping-cart',
+                    title: 'Realizar pedido urgente',
+                    description: `Hay ${criticalStock.length} productos con stock crítico que necesitan reposición inmediata.`,
+                    action: 'Ver productos',
+                    onClick: 'showCriticalProducts()'
+                });
+            }
+
+            // Productos próximos a vencer
+            const today = new Date();
+            const expiringSoon = products.filter(p => {
+                if (!p.expiryDate) return false;
+                const expiry = new Date(p.expiryDate);
+                const days = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
+                return days > 0 && days <= 7;
+            });
+
+            if (expiringSoon.length > 0) {
+                recommendations.push({
+                    icon: 'fa-percent',
+                    title: 'Aplicar descuentos',
+                    description: `${expiringSoon.length} productos vencen pronto. Considera aplicar descuentos para acelerar su venta.`,
+                    action: 'Ver productos',
+                    onClick: 'showExpiringSoon()'
+                });
+            }
+
+            // Productos vencidos
+            const expired = products.filter(p => {
+                if (!p.expiryDate) return false;
+                const expiry = new Date(p.expiryDate);
+                return expiry < today;
+            });
+
+            if (expired.length > 0) {
+                recommendations.push({
+                    icon: 'fa-trash-alt',
+                    title: 'Retirar productos vencidos',
+                    description: `${expired.length} productos están vencidos y deben ser retirados del inventario.`,
+                    action: 'Ver productos',
+                    onClick: 'showExpiredProducts()'
+                });
+            }
+
+            if (recommendations.length === 0) {
+                container.innerHTML = `
+                    <div class="no-recommendations">
+                        <i class="fas fa-thumbs-up"></i>
+                        <p>No hay acciones recomendadas en este momento</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = recommendations.map(rec => `
+                <div class="recommendation-card">
+                    <div class="rec-icon">
+                        <i class="fas ${rec.icon}"></i>
+                    </div>
+                    <div class="rec-content">
+                        <h4>${rec.title}</h4>
+                        <p>${rec.description}</p>
+                    </div>
+                    <button class="btn btn-primary" onclick="${rec.onClick}">
+                        ${rec.action}
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function goToProduct(productName) {
+            window.location.href = `productos.html?search=${encodeURIComponent(productName)}`;
+        }
+
+        function quickRestock(productName) {
+            const products = getProducts();
+            const product = products.find(p => p.name === productName);
+            
+            if (product) {
+                const amount = prompt(`¿Cuántas unidades de "${productName}" deseas agregar?`, '10');
+                if (amount && !isNaN(amount)) {
+                    const newQuantity = product.quantity + parseInt(amount);
+                    updateProductStock(product.id, newQuantity);
+                    alert(`✅ Stock actualizado: ${productName} ahora tiene ${newQuantity} unidades`);
+                    loadAlerts();
+                }
+            }
+        }
+
+        function showCriticalProducts() {
+            window.location.href = 'productos.html?filter=low-stock';
+        }
+
+        function showExpiringSoon() {
+            window.location.href = 'productos.html?filter=expiring';
+        }
+
+        function showExpiredProducts() {
+            window.location.href = 'productos.html?filter=expired';
+        }
+    </script>
+</body>
+</html>

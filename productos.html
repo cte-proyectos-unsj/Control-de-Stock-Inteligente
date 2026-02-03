@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Productos - Stock Inteligente</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <i class="fas fa-boxes"></i>
+                <h1>Stock Inteligente</h1>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="index.html"><i class="fas fa-home"></i> Dashboard</a></li>
+                <li><a href="productos.html" class="active"><i class="fas fa-box"></i> Productos</a></li>
+                <li><a href="escanear.html"><i class="fas fa-camera"></i> Escanear</a></li>
+                <li><a href="alertas.html"><i class="fas fa-bell"></i> Alertas</a></li>
+                <li><a href="agregar.html"><i class="fas fa-plus"></i> Agregar</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="container">
+        <header class="page-header">
+            <h2><i class="fas fa-box"></i> Gestión de Productos</h2>
+            <a href="agregar.html" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Agregar Producto
+            </a>
+        </header>
+
+        <!-- Buscador y Filtros -->
+        <section class="search-section">
+            <div class="search-container">
+                <i class="fas fa-search"></i>
+                <input type="text" id="searchInput" placeholder="Buscar por nombre o código de barras..." class="search-input">
+            </div>
+            <div class="filter-buttons">
+                <button class="btn btn-filter active" data-filter="all">Todos</button>
+                <button class="btn btn-filter" data-filter="low-stock">Stock Bajo</button>
+                <button class="btn btn-filter" data-filter="expiring">Por Vencer</button>
+            </div>
+        </section>
+
+        <!-- Tabla de Productos -->
+        <section class="products-section">
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Producto</th>
+                            <th>Código</th>
+                            <th>Stock</th>
+                            <th>Stock Mínimo</th>
+                            <th>Vencimiento</th>
+                            <th>Proveedor</th>
+                            <th>Precio</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="productsTable">
+                        <tr>
+                            <td colspan="8" class="text-center">Cargando productos...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Modal de Edición Rápida -->
+        <div id="editModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Editar Stock</h3>
+                    <button class="modal-close" onclick="closeEditModal()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p id="editProductName" class="text-bold"></p>
+                    <div class="stock-adjuster">
+                        <button class="btn btn-secondary" onclick="adjustStock(-10)">-10</button>
+                        <button class="btn btn-secondary" onclick="adjustStock(-1)">-1</button>
+                        <input type="number" id="editStockInput" class="stock-input">
+                        <button class="btn btn-secondary" onclick="adjustStock(1)">+1</button>
+                        <button class="btn btn-secondary" onclick="adjustStock(10)">+10</button>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeEditModal()">Cancelar</button>
+                    <button class="btn btn-primary" onclick="saveStockEdit()">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="js/storage.js"></script>
+    <script src="js/app.js"></script>
+    <script>
+        let currentEditingProduct = null;
+        let currentFilter = 'all';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadProducts();
+            
+            // Búsqueda en tiempo real
+            document.getElementById('searchInput').addEventListener('input', (e) => {
+                filterProducts(e.target.value);
+            });
+
+            // Botones de filtro
+            document.querySelectorAll('.btn-filter').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    document.querySelectorAll('.btn-filter').forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                    currentFilter = e.target.dataset.filter;
+                    loadProducts();
+                });
+            });
+        });
+
+        function loadProducts() {
+            let products = getProducts();
+
+            // Aplicar filtros
+            if (currentFilter === 'low-stock') {
+                products = products.filter(p => p.quantity <= p.minStock);
+            } else if (currentFilter === 'expiring') {
+                const today = new Date();
+                products = products.filter(p => {
+                    if (!p.expiryDate) return false;
+                    const expiry = new Date(p.expiryDate);
+                    const days = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
+                    return days <= 30 && days >= 0;
+                });
+            }
+
+            displayProducts(products);
+        }
+
+        function displayProducts(products) {
+            const tbody = document.getElementById('productsTable');
+
+            if (products.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center">No se encontraron productos</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = products.map(p => {
+                const stockClass = p.quantity <= p.minStock ? 'badge-danger' : 'badge-success';
+                const expiryWarning = checkExpiry(p.expiryDate);
+                
+                return `
+                    <tr>
+                        <td><strong>${p.name}</strong></td>
+                        <td>${p.barcode || '-'}</td>
+                        <td>
+                            <span class="badge ${stockClass}">${p.quantity}</span>
+                            <button class="btn-icon" onclick="openEditModal(${p.id})" title="Editar stock">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                        </td>
+                        <td>${p.minStock}</td>
+                        <td>${p.expiryDate ? `${p.expiryDate} ${expiryWarning}` : '-'}</td>
+                        <td>${p.supplier || '-'}</td>
+                        <td>$${p.price.toLocaleString('es-AR')}</td>
+                        <td class="actions">
+                            <button class="btn-icon btn-edit" onclick="editProduct(${p.id})" title="Editar">
+                                <i class="fas fa-pen"></i>
+                            </button>
+                            <button class="btn-icon btn-delete" onclick="deleteProduct(${p.id})" title="Eliminar">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function checkExpiry(expiryDate) {
+            if (!expiryDate) return '';
+            
+            const today = new Date();
+            const expiry = new Date(expiryDate);
+            const days = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
+
+            if (days < 0) return '<span class="badge badge-danger">VENCIDO</span>';
+            if (days <= 7) return '<span class="badge badge-warning">⚠️ ' + days + 'd</span>';
+            return '';
+        }
+
+        function filterProducts(searchTerm) {
+            const products = getProducts();
+            const filtered = products.filter(p => 
+                p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (p.barcode && p.barcode.includes(searchTerm))
+            );
+            displayProducts(filtered);
+        }
+
+        function openEditModal(productId) {
+            currentEditingProduct = getProducts().find(p => p.id === productId);
+            if (!currentEditingProduct) return;
+
+            document.getElementById('editProductName').textContent = currentEditingProduct.name;
+            document.getElementById('editStockInput').value = currentEditingProduct.quantity;
+            document.getElementById('editModal').classList.add('active');
+        }
+
+        function closeEditModal() {
+            document.getElementById('editModal').classList.remove('active');
+            currentEditingProduct = null;
+        }
+
+        function adjustStock(amount) {
+            const input = document.getElementById('editStockInput');
+            const newValue = Math.max(0, parseInt(input.value) + amount);
+            input.value = newValue;
+        }
+
+        function saveStockEdit() {
+            if (!currentEditingProduct) return;
+
+            const newQuantity = parseInt(document.getElementById('editStockInput').value);
+            updateProductStock(currentEditingProduct.id, newQuantity);
+            closeEditModal();
+            loadProducts();
+        }
+
+        function editProduct(productId) {
+            // Redirigir a página de edición (puedes usar agregar.html con parámetros)
+            window.location.href = `agregar.html?edit=${productId}`;
+        }
+
+        function deleteProduct(productId) {
+            if (confirm('¿Estás seguro de eliminar este producto?')) {
+                deleteProductById(productId);
+                loadProducts();
+            }
+        }
+    </script>
+</body>
+</html>

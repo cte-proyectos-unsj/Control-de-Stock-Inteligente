@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Inteligente - Dashboard</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <i class="fas fa-boxes"></i>
+                <h1>Stock Inteligente</h1>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="index.html" class="active"><i class="fas fa-home"></i> Dashboard</a></li>
+                <li><a href="productos.html"><i class="fas fa-box"></i> Productos</a></li>
+                <li><a href="escanear.html"><i class="fas fa-camera"></i> Escanear</a></li>
+                <li><a href="alertas.html"><i class="fas fa-bell"></i> Alertas</a></li>
+                <li><a href="agregar.html"><i class="fas fa-plus"></i> Agregar</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="container">
+        <header class="page-header">
+            <h2>Dashboard de Inventario</h2>
+            <p class="date-display" id="currentDate"></p>
+        </header>
+
+        <!-- Tarjetas de Estadísticas -->
+        <section class="stats-grid">
+            <div class="stat-card blue">
+                <div class="stat-icon">
+                    <i class="fas fa-boxes"></i>
+                </div>
+                <div class="stat-content">
+                    <h3 id="totalProducts">0</h3>
+                    <p>Total Productos</p>
+                </div>
+            </div>
+
+            <div class="stat-card red">
+                <div class="stat-icon">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <div class="stat-content">
+                    <h3 id="lowStockCount">0</h3>
+                    <p>Stock Bajo</p>
+                </div>
+            </div>
+
+            <div class="stat-card yellow">
+                <div class="stat-icon">
+                    <i class="fas fa-calendar-times"></i>
+                </div>
+                <div class="stat-content">
+                    <h3 id="expiringCount">0</h3>
+                    <p>Por Vencer</p>
+                </div>
+            </div>
+
+            <div class="stat-card green">
+                <div class="stat-icon">
+                    <i class="fas fa-dollar-sign"></i>
+                </div>
+                <div class="stat-content">
+                    <h3 id="totalValue">$0</h3>
+                    <p>Valor Total</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Alertas Activas -->
+        <section class="alerts-section">
+            <div class="section-header">
+                <h3><i class="fas fa-bell"></i> Alertas Activas</h3>
+                <a href="alertas.html" class="btn-link">Ver todas</a>
+            </div>
+            <div id="alertsList" class="alerts-container">
+                <p class="loading">Cargando alertas...</p>
+            </div>
+        </section>
+
+        <!-- Productos con Stock Crítico -->
+        <section class="products-section">
+            <div class="section-header">
+                <h3><i class="fas fa-box-open"></i> Productos con Stock Crítico</h3>
+                <a href="productos.html" class="btn-link">Ver todos</a>
+            </div>
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Producto</th>
+                            <th>Código</th>
+                            <th>Stock Actual</th>
+                            <th>Stock Mínimo</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="criticalStockTable">
+                        <tr>
+                            <td colspan="5" class="text-center">Cargando productos...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Gráfico de Stock (opcional para después) -->
+        <section class="chart-section" style="display:none;">
+            <h3><i class="fas fa-chart-bar"></i> Estadísticas de Inventario</h3>
+            <canvas id="stockChart"></canvas>
+        </section>
+    </main>
+
+    <script src="js/storage.js"></script>
+    <script src="js/app.js"></script>
+    <script>
+        // Cargar datos del dashboard
+        document.addEventListener('DOMContentLoaded', () => {
+            // Mostrar fecha actual
+            const today = new Date();
+            document.getElementById('currentDate').textContent = today.toLocaleDateString('es-AR', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+
+            loadDashboardData();
+        });
+
+        function loadDashboardData() {
+            const products = getProducts();
+            const alerts = getAlerts();
+
+            // Actualizar estadísticas
+            document.getElementById('totalProducts').textContent = products.length;
+            
+            const lowStock = alerts.filter(a => a.type === 'stock').length;
+            document.getElementById('lowStockCount').textContent = lowStock;
+            
+            const expiring = alerts.filter(a => a.type === 'expiry' || a.type === 'expired').length;
+            document.getElementById('expiringCount').textContent = expiring;
+            
+            const totalValue = products.reduce((sum, p) => sum + (p.quantity * p.price), 0);
+            document.getElementById('totalValue').textContent = `$${totalValue.toLocaleString('es-AR')}`;
+
+            // Mostrar alertas
+            displayAlerts(alerts);
+
+            // Mostrar productos con stock crítico
+            displayCriticalStock(products);
+        }
+
+        function displayAlerts(alerts) {
+            const container = document.getElementById('alertsList');
+            
+            if (alerts.length === 0) {
+                container.innerHTML = '<div class="alert-success"><i class="fas fa-check-circle"></i> No hay alertas activas 🎉</div>';
+                return;
+            }
+
+            const alertsHTML = alerts.slice(0, 5).map(alert => {
+                const severityClass = alert.severity === 'critical' ? 'alert-critical' : 
+                                     alert.severity === 'high' ? 'alert-high' : 'alert-medium';
+                return `
+                    <div class="alert-item ${severityClass}">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <span>${alert.message}</span>
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = alertsHTML;
+        }
+
+        function displayCriticalStock(products) {
+            const critical = products.filter(p => p.quantity <= p.minStock).slice(0, 5);
+            const tbody = document.getElementById('criticalStockTable');
+
+            if (critical.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center">✅ Todos los productos tienen stock suficiente</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = critical.map(p => `
+                <tr>
+                    <td><strong>${p.name}</strong></td>
+                    <td>${p.barcode || '-'}</td>
+                    <td><span class="badge badge-danger">${p.quantity}</span></td>
+                    <td>${p.minStock}</td>
+                    <td><span class="status-critical">⚠️ Crítico</span></td>
+                </tr>
+            `).join('');
+        }
+    </script>
+</body>
+</html>
